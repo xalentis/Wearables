@@ -30,6 +30,34 @@ pred_chart_properties = {
     }
 }
 
+correlation_chart_options = {
+    "colorscale": "Bluered",
+    "mode":"text"
+}
+
+correlation_chart_layout = {
+    "annotations": [],
+    "xaxis": {
+        "visible": True,
+        "title":None
+    },
+    "yaxis": {
+        "visible": True,
+        "title":None
+    }
+}
+
+hist_chart_layout = {
+    "xaxis": {
+        "visible": True,
+        "title":None
+    },
+    "yaxis": {
+        "visible": True,
+        "title":None
+    }
+}
+
 #endregion
 
 # region ML Models
@@ -64,7 +92,13 @@ hr_data_chart = pd.DataFrame(columns=["Period", "HR"])
 bvp_data_chart = pd.DataFrame(columns=["Period", "BVP"])
 ibi_data_chart = pd.DataFrame(columns=["Period", "IBI"])
 temp_data_chart = pd.DataFrame(columns=["Period", "TEMP"])
-acc_data_chart = pd.DataFrame(columns=["Period", "ACC"])
+acc_data_chart = pd.DataFrame(columns=["Period", "Magnitude"])
+
+stat_visible = False
+correlation_data_chart = pd.DataFrame(columns=["x","y","z"])
+hr_hist_data_chart = []
+eda_hist_data_chart = []
+temp_hist_data_chart = []
 
 pred_visible = False
 pred_data_chart = pd.DataFrame(columns=["Period", "Stress", "Attention", "Valence", "Arousal"])
@@ -95,8 +129,6 @@ def on_upload_e4(state):
         files = state.file_content
     for file in files:
         if "ACC" in file.upper():
-            # todo
-            
             state.acc_data = pd.read_csv(file, header=None)
             start_time = state.acc_data.values[0]
             sampling_rate = state.acc_data.values[1]
@@ -143,6 +175,7 @@ def on_upload_e4(state):
                 state.temp_data = pd.DataFrame(columns=["datetime", "temp"])
                 state.temp_data["datetime"] = timestamps
                 state.temp_data["temp"] = temp
+                state.temp_hist_data_chart = state.temp_data["temp"].tolist()
                 state.temp_data_chart = {"Period": state.temp_data["datetime"].tolist(), "TEMP": state.temp_data["temp"].tolist()}
                 state.temp_visible = True
             except:
@@ -179,6 +212,7 @@ def on_upload_e4(state):
                 state.eda_data = pd.DataFrame(columns=["datetime", "eda"])
                 state.eda_data["datetime"] = timestamps
                 state.eda_data["eda"] = eda
+                state.eda_hist_data_chart = state.eda_data["eda"].tolist()
                 state.eda_data_chart = {"Period": state.eda_data["datetime"].tolist(), "EDA": state.eda_data["eda"].tolist()}
                 state.eda_visible = True
             except:
@@ -195,6 +229,7 @@ def on_upload_e4(state):
                 state.hr_data = pd.DataFrame(columns=["datetime", "hr"])
                 state.hr_data["datetime"] = timestamps
                 state.hr_data["hr"] = hr
+                state.hr_hist_data_chart = state.hr_data["hr"].tolist()
                 state.hr_data_chart = {"Period": state.hr_data["datetime"].tolist(), "HR": state.hr_data["hr"].tolist()}
                 state.hr_visible = True
             except:
@@ -202,6 +237,53 @@ def on_upload_e4(state):
                 state.hr_visible = False
                 state.hr_data = None
                 notify(state, "error", "Error processing HR data...")
+    # correlation
+    tables = []
+    if state.hr_data.shape[0] > 0:
+        tables.append(state.hr_data)
+    if state.eda_data.shape[0] > 0:
+        tables.append(state.eda_data)
+    if state.bvp_data.shape[0] > 0:
+        tables.append(state.bvp_data)
+    if state.ibi_data.shape[0] > 0:
+        tables.append(state.ibi_data)
+    if state.temp_data.shape[0] > 0:
+        tables.append(state.temp_data)
+    if state.acc_data.shape[0] > 0:
+        tables.append(state.acc_data)
+    if len(tables) > 1:
+        state.stat_visible = True
+        second_columns = [df.iloc[:, 1] for df in tables]
+        combined_df = pd.concat(second_columns, axis=1)
+        if "hr" in combined_df.columns:
+            combined_df.rename(columns={"hr": "HR"}, inplace=True)
+        if "eda" in combined_df.columns:
+            combined_df.rename(columns={"eda": "EDA"}, inplace=True)
+        if "bvp" in combined_df.columns:
+            combined_df.rename(columns={"bvp": "BVP"}, inplace=True)
+        if "ibi" in combined_df.columns:
+            combined_df.rename(columns={"ibi": "IBI"}, inplace=True)
+        if "temp" in combined_df.columns:
+            combined_df.rename(columns={"temp": "TEMP"}, inplace=True)
+        if "magnitude" in combined_df.columns:
+            combined_df.rename(columns={"magnitude": "ACC"}, inplace=True)
+        df_corr = combined_df.corr()
+        x = df_corr.columns.tolist()
+        y = df_corr.index.tolist()
+        z = np.array(df_corr).tolist()
+
+        for xx in df_corr.columns:
+            for yy in df_corr.index:
+                corr_value = df_corr[xx][yy]
+                annotation = {
+                    "x": xx,
+                    "y": yy,
+                    "text": round(corr_value, 2),
+                    "showarrow": False
+                }
+                state.correlation_chart_layout["annotations"].append(annotation)
+        state.correlation_data_chart = {"x": x, "y": y, "z": z}
+    # predictions
     if state.hr_data is not None and state.eda_data is not None: # used for prediction, so we need both
         hr = state.hr_data["hr"].tolist()
         eda = state.eda_data['eda'].tolist()
@@ -269,10 +351,24 @@ with tgb.Page() as page_main:
         with tgb.part(render="{acc_visible}"):
             with tgb.expandable(title="Movement", expanded=True):
                 tgb.chart("{acc_data_chart}", height="300px", x="Period", y="Magnitude", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{chart_properties}")
+        with tgb.part():
+            with tgb.part(render="{stat_visible}"):
+                with tgb.expandable(title="Statistics", expanded=False):
+                    with tgb.layout("1 1 1 1"):
+                        with tgb.part():
+                            tgb.chart("{correlation_data_chart}", type="heatmap", title="Correlation", x="x", y="y", z="z", height="300px", rebuild=True, options="{correlation_chart_options}", layout="{correlation_chart_layout}")
+                        with tgb.part(render="{hr_visible}"):
+                            tgb.chart("{hr_hist_data_chart}", type="histogram", height="300px", rebuild=True, title="HR", layout="{hist_chart_layout}")
+                        with tgb.part(render="{eda_visible}"):
+                            tgb.chart("{eda_hist_data_chart}", type="histogram", height="300px", rebuild=True, title="EDA", layout="{hist_chart_layout}")
+                        with tgb.part(render="{temp_visible}"):
+                            tgb.chart("{temp_hist_data_chart}", type="histogram", height="300px", rebuild=True, title="TEMP", layout="{hist_chart_layout}")
         with tgb.part(render="{pred_visible}"):
-            with tgb.expandable(title="Emotional State", expanded=True):
-                tgb.chart("{pred_data_chart}", x="Period", y__1="Stress", y__2="Arousal", y__3="Valence", y__4="Attention", height="300px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
+            with tgb.expandable(title="Emotional State", expanded=False):
+                with tgb.part():
+                    tgb.chart("{pred_data_chart}", x="Period", y__1="Stress", y__2="Arousal", y__3="Valence", y__4="Attention", height="300px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
 
+            
 if __name__ == "__main__":
     pages = {"page_main": page_main, "embrace_dialog": embrace_dialog}
-    Gui(pages=pages).run(title="Wearables")
+    Gui(pages=pages).run(title="Empatica Data Viewer")
