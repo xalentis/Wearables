@@ -6,6 +6,8 @@ from taipy.gui import Gui, notify
 import taipy.gui.builder as tgb
 from datetime import datetime, timedelta
 
+pd.options.mode.chained_assignment = None 
+
 # region Chart Configuration
 
 chart_layout = {
@@ -75,6 +77,7 @@ model_arousal.load_model("Wearables/model_arousal.xgb")
 
 # region Data and Charts
 
+# E4 and embrace
 hr_visible = False
 eda_visible = False
 bvp_visible = False
@@ -93,25 +96,73 @@ bvp_data_chart = pd.DataFrame(columns=["Period", "BVP"])
 ibi_data_chart = pd.DataFrame(columns=["Period", "IBI"])
 temp_data_chart = pd.DataFrame(columns=["Period", "TEMP"])
 acc_data_chart = pd.DataFrame(columns=["Period", "Magnitude"])
-
 stat_visible = False
 correlation_data_chart = pd.DataFrame(columns=["x","y","z"])
 hr_hist_data_chart = []
 eda_hist_data_chart = []
 temp_hist_data_chart = []
 
+# emotion predictions
 pred_visible = False
 pred_data_chart = pd.DataFrame(columns=["Period", "Stress", "Attention", "Valence", "Arousal"])
 
+# oura
+oura_data = None
+sleep_visible = False
+sleep_data = None
+sleep_data_chart = pd.DataFrame(columns=["Date", "Score", "Total Score", "REM Score", "Deep Score", "Tranquility Score", "Latency Score", "Timing Score"])
+biomarkers_visible = False
+biomarkers_data = None
+biomarkers_data_chart = pd.DataFrame(columns=["Date", "Average Resting Heart Rate", "Lowest Resting Heart Rate", "Average HRV", "Respiratory Rate"])
+activity_visible = False
+activity_data = None
+activity_data_chart = pd.DataFrame(columns=["Date", "Activity Score", "Stay Active Score", "Move Every Hour Score", "Meet Daily Targets Score", "Training Frequency Score", "Training Volume Score", "Recovery Time Score"])
+calories_visible = False
+calories_data = None
+calories_data_chart = pd.DataFrame(columns=["Date", "Activity Burn", "Total Burn", "Target Calories"])
+movement_visible = False
+movement_data = None
+movement_data_chart = pd.DataFrame(columns=["Date", "Steps", "Daily Movement", "Inactive Time", "Rest Time", "Low Activity Time", "Medium Activity Time", "High Activity Time", "Non-wear Time"])
+
 # endregion
 
-# region Empatica Upload/Download
+# region File Upload/Download
 
 file_content = None
 show_embrace_dialog = False
 aws_path = ""
 aws_key = ""
 aws_secret = ""
+
+def on_upload_oura(state):
+    files = None
+    if type(state.file_content) is str:
+        files = state.file_content.split(";")
+    else:
+        files = state.file_content
+    for file in files:
+        state.oura_data = pd.read_csv(file)
+        state.sleep_data = state.oura_data[["date", "Sleep Score", "Total Sleep Score", "REM Sleep Score", "Deep Sleep Score", "Sleep Tranquility Score", "Sleep Latency Score", "Sleep Timing Score"]] 
+        state.sleep_data.dropna(inplace=True)
+        state.sleep_data_chart = state.sleep_data.rename(columns={"date": "Date", "Sleep Score": "Score", "Total Sleep Score": "Total Score", "REM Sleep Score": "REM Score", "Deep Sleep Score": "Deep Score", "Sleep Tranquility Score": "Tranquility Score", "Sleep Latency Score": "Latency Score", "Sleep Timing Score": "Timing Score"})
+        state.sleep_visible = True
+        state.biomarkers_data = state.oura_data[["date", "Average Resting Heart Rate", "Lowest Resting Heart Rate", "Average HRV", "Respiratory Rate"]]
+        state.biomarkers_data.dropna(inplace=True)
+        state.biomarkers_data_chart = state.biomarkers_data.rename(columns={"date": "Date"})
+        state.biomarkers_visible = True
+        state.activity_data = state.oura_data[["date", "Activity Score", "Stay Active Score", "Move Every Hour Score", "Meet Daily Targets Score", "Training Frequency Score", "Training Volume Score", "Recovery Time Score"]]
+        state.activity_data.dropna(inplace=True)
+        state.activity_data_chart = state.activity_data.rename(columns={"date": "Date"})
+        state.activity_visible = True
+        state.calories_data = state.oura_data[["date", "Activity Burn", "Total Burn", "Target Calories"]]
+        state.calories_data.dropna(inplace=True)
+        state.calories_data_chart = state.calories_data.rename(columns={"date": "Date"})
+        state.calories_visible = True
+        state.movement_data = state.oura_data[["date", "Steps", "Daily Movement", "Inactive Time", "Rest Time", "Low Activity Time", "Medium Activity Time", "High Activity Time", "Non-wear Time"]]
+        state.movement_data.dropna(inplace=True)
+        state.movement_data_chart = state.movement_data.rename(columns={"date": "Date"})
+        state.movement_visible = True
+
 
 def on_upload_embrace(state):
     state.show_embrace_dialog = True
@@ -332,6 +383,7 @@ with tgb.Page() as page_main:
             tgb.file_selector("{file_content}", label="Import E4 Data", on_action=on_upload_e4, extensions=".csv", drop_message="Drop To Process", multiple=True)
             tgb.button("Import Embrace Data", on_action=on_upload_embrace)
             tgb.dialog("{show_embrace_dialog}", title="Download Embrace Data", page="embrace_dialog", on_action=embrace_action, labels="Download;Cancel")
+            tgb.file_selector("{file_content}", label="Import Oura Data", on_action=on_upload_oura, extensions=".csv", drop_message="Drop To Process", multiple=False)
     with tgb.layout("1 1fs"):
         with tgb.part(render="{hr_visible}"):
             with tgb.expandable(title="Heart Rate", expanded=True):
@@ -367,8 +419,28 @@ with tgb.Page() as page_main:
             with tgb.expandable(title="Emotional State", expanded=False):
                 with tgb.part():
                     tgb.chart("{pred_data_chart}", x="Period", y__1="Stress", y__2="Arousal", y__3="Valence", y__4="Attention", height="300px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
+        # oura
+        with tgb.part(render="{sleep_visible}"):
+            with tgb.expandable(title="Sleep", expanded=False):
+                with tgb.part():
+                    tgb.chart("{sleep_data_chart}", x="Date", y__1="Score", y__2="Total Score", y__3="REM Score", y__4="Deep Score", y__5="Tranquility Score", y__6="Latency Score", y__7="Timing Score", height="400px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
+        with tgb.part(render="{biomarkers_visible}"):
+            with tgb.expandable(title="Biomarkers", expanded=False):
+                with tgb.part():
+                    tgb.chart("{biomarkers_data_chart}", x="Date", y__1="Average Resting Heart Rate", y__2="Lowest Resting Heart Rate", y__3="Average HRV", y__4="Respiratory Rate", height="400px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
+        with tgb.part(render="{activity_visible}"):
+            with tgb.expandable(title="Activity", expanded=False):
+                with tgb.part():
+                    tgb.chart("{activity_data_chart}", x="Date", y__1="Activity Score", y__2="Stay Active Score", y__3="Move Every Hour Score", y__4="Meet Daily Targets Score", y__5="Training Frequency Score", y__6="Training Volume Score", y__7="Recovery Time Score", height="400px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
+        with tgb.part(render="{calories_visible}"):
+            with tgb.expandable(title="Calories", expanded=False):
+                with tgb.part():
+                    tgb.chart("{calories_data_chart}", x="Date", y__1="Activity Burn", y__2="Total Burn", y__3="Target Calories", height="400px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
+        with tgb.part(render="{movement_visible}"):
+            with tgb.expandable(title="Movement", expanded=False):
+                with tgb.part():
+                    tgb.chart("{movement_data_chart}", x="Date", y__1="Steps", y__2="Daily Movement", y__3="Inactive Time", y__4="Rest Time", y__5="Low Activity Time", y__6="Medium Activity Time", y__7="High Activity Time", y__8="Non-wear Time", height="400px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
 
-            
 if __name__ == "__main__":
     pages = {"page_main": page_main, "embrace_dialog": embrace_dialog}
-    Gui(pages=pages).run(title="Empatica Data Viewer")
+    Gui(pages=pages).run(title="Wearable Device Analysis")
