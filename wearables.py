@@ -41,12 +41,25 @@ correlation_chart_layout = {
     "annotations": [],
     "xaxis": {
         "visible": True,
-        "title":None
+        "automargin":True,
+        "title":None,
+        "tickfont": {
+            "size":10
+        }
     },
     "yaxis": {
         "visible": True,
-        "title":None
+        "automargin":True,
+        "title":None,
+        "tickfont": {
+            "size":10
+        }
     }
+}
+
+correlation_chart_config = {
+    "displayModeBar": False,
+    "displaylogo":False
 }
 
 hist_chart_layout = {
@@ -107,6 +120,7 @@ pred_visible = False
 pred_data_chart = pd.DataFrame(columns=["Period", "Stress", "Attention", "Valence", "Arousal"])
 
 # oura
+oura_stat_visible = False
 oura_data = None
 sleep_visible = False
 sleep_data = None
@@ -123,6 +137,9 @@ calories_data_chart = pd.DataFrame(columns=["Date", "Activity Burn", "Total Burn
 movement_visible = False
 movement_data = None
 movement_data_chart = pd.DataFrame(columns=["Date", "Steps", "Daily Movement", "Inactive Time", "Rest Time", "Low Activity Time", "Medium Activity Time", "High Activity Time", "Non-wear Time"])
+oura_stat_visible = False
+oura_correlation_data_chart = pd.DataFrame(columns=["x","y","z"])
+
 
 # endregion
 
@@ -162,6 +179,42 @@ def on_upload_oura(state):
         state.movement_data.dropna(inplace=True)
         state.movement_data_chart = state.movement_data.rename(columns={"date": "Date"})
         state.movement_visible = True
+        combined_df = pd.merge(state.sleep_data, state.biomarkers_data, on="date", how="inner")
+        combined_df = pd.merge(combined_df, state.activity_data, on="date", how="inner")
+        combined_df = pd.merge(combined_df, state.calories_data, on="date", how="inner")
+        combined_df = pd.merge(combined_df, state.movement_data, on="date", how="inner")
+        combined_df.drop("date", axis=1, inplace=True)
+        combined_df.drop("Non-wear Time", axis=1, inplace=True)
+        combined_df.drop("Sleep Score", axis=1, inplace=True)
+        combined_df.drop("Lowest Resting Heart Rate", axis=1, inplace=True)
+        combined_df.drop("Stay Active Score", axis=1, inplace=True)
+        combined_df.drop("Meet Daily Targets Score", axis=1, inplace=True)
+        combined_df.drop("Recovery Time Score", axis=1, inplace=True)
+        combined_df.drop("Activity Burn", axis=1, inplace=True)
+        combined_df.drop("Target Calories", axis=1, inplace=True)
+        combined_df.drop("Steps", axis=1, inplace=True)
+        combined_df.drop("Low Activity Time", axis=1, inplace=True)
+        combined_df.drop("Medium Activity Time", axis=1, inplace=True)
+        combined_df.drop("High Activity Time", axis=1, inplace=True)
+        combined_df.columns = combined_df.columns.str.replace("Score", "", regex=False)
+        combined_df.columns = combined_df.columns.str.replace("Rate", "", regex=False)
+        combined_df.columns = combined_df.columns.str.strip()
+        df_corr = combined_df.corr()
+        x = df_corr.columns.tolist()
+        y = df_corr.index.tolist()
+        z = np.array(df_corr).tolist()
+        for xx in df_corr.columns:
+            for yy in df_corr.index:
+                corr_value = df_corr[xx][yy]
+                annotation = {
+                    "x": xx,
+                    "y": yy,
+                    "text": round(corr_value, 2),
+                    "showarrow": False
+                }
+                state.correlation_chart_layout["annotations"].append(annotation)
+        state.oura_correlation_data_chart = {"x": x, "y": y, "z": z}
+        state.oura_stat_visible = True
 
 
 def on_upload_embrace(state):
@@ -322,7 +375,6 @@ def on_upload_e4(state):
         x = df_corr.columns.tolist()
         y = df_corr.index.tolist()
         z = np.array(df_corr).tolist()
-
         for xx in df_corr.columns:
             for yy in df_corr.index:
                 corr_value = df_corr[xx][yy]
@@ -337,19 +389,19 @@ def on_upload_e4(state):
     # predictions
     if state.hr_data is not None and state.eda_data is not None: # used for prediction, so we need both
         hr = state.hr_data["hr"].tolist()
-        eda = state.eda_data['eda'].tolist()
+        eda = state.eda_data["eda"].tolist()
         if len(eda) < len(hr):
             hr = hr[0:len(eda)]
         else:
             eda = eda[0:len(hr)]
         periods = state.hr_data["datetime"].tolist()[0:len(hr)]
-        temp = pd.DataFrame({'hr': hr,'eda': eda})
+        temp = pd.DataFrame({"hr": hr,"eda": eda})
         stress = model_stress.predict(xgb.DMatrix(temp[["hr","eda"]]))
         attention = model_attention.predict(xgb.DMatrix(temp[["hr","eda"]]))
         arousal = model_arousal.predict(xgb.DMatrix(temp[["hr","eda"]]))
         valence = model_valence.predict(xgb.DMatrix(temp[["hr","eda"]]))
-        temp = pd.DataFrame({'period': periods,\
-                             'stress': stress, \
+        temp = pd.DataFrame({"period": periods,\
+                             "stress": stress, \
                              "attention": attention, \
                              "arousal": arousal, \
                              "valance": valence})
@@ -440,7 +492,11 @@ with tgb.Page() as page_main:
             with tgb.expandable(title="Movement", expanded=False):
                 with tgb.part():
                     tgb.chart("{movement_data_chart}", x="Date", y__1="Steps", y__2="Daily Movement", y__3="Inactive Time", y__4="Rest Time", y__5="Low Activity Time", y__6="Medium Activity Time", y__7="High Activity Time", y__8="Non-wear Time", height="400px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
-
+        with tgb.part():
+            with tgb.part(render="{oura_stat_visible}"):
+                with tgb.expandable(title="Correlation", expanded=False):
+                    with tgb.part():
+                        tgb.chart("{oura_correlation_data_chart}", type="heatmap", x="x", y="y", z="z", rebuild=True, options="{correlation_chart_options}", layout="{correlation_chart_layout}", class_name="center_text", plot_config="{correlation_chart_config}")
 if __name__ == "__main__":
     pages = {"page_main": page_main, "embrace_dialog": embrace_dialog}
     Gui(pages=pages).run(title="Wearable Device Analysis")
