@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import pandas as pd
+import pytz
 import xgboost as xgb
 from taipy.gui import Gui, notify
 import taipy.gui.builder as tgb
@@ -65,6 +66,17 @@ correlation_chart_config = {
 hist_chart_layout = {
     "xaxis": {
         "visible": True,
+        "title":None
+    },
+    "yaxis": {
+        "visible": True,
+        "title":None
+    }
+}
+
+box_chart_layout = {
+    "xaxis": {
+        "visible": False,
         "title":None
     },
     "yaxis": {
@@ -177,6 +189,17 @@ oura_correlation_data_chart = pd.DataFrame(columns=["x","y","z"])
 
 file_content = None
 
+def convert_to_local_timezone(timestamps, local_timezone):
+    local_times = []
+    for ts in timestamps:
+        # Parse the ISO timestamp and assign UTC timezone
+        utc_time = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=pytz.UTC)
+        
+        # Convert to local timezone
+        local_time = utc_time.astimezone(pytz.timezone(local_timezone))
+        local_times.append(local_time.isoformat())
+    return local_times
+
 def on_upload_oura(state):
     files = None
     if type(state.file_content) is str:
@@ -259,6 +282,7 @@ def on_upload_embrace(state):
                 state.emb_respiratory_rate_data = pd.concat([state.emb_respiratory_rate_data, temp], axis=0)
             state.emb_respiratory_rate_data = state.emb_respiratory_rate_data.sort_values(by=["timestamp_iso"], ascending=True)
             timestamps = state.emb_respiratory_rate_data["timestamp_iso"].tolist()
+            timestamps = convert_to_local_timezone(timestamps, "Australia/Brisbane")
             rate = state.emb_respiratory_rate_data["respiratory_rate_brpm"].tolist()
             state.emb_respiratory_rate_data_chart = {"Period": timestamps, "RATE": rate}
             state.emb_respiratory_rate_visible = True
@@ -271,6 +295,7 @@ def on_upload_embrace(state):
                 state.emb_step_counts_data = pd.concat([state.emb_step_counts_data, temp], axis=0)
             state.emb_step_counts_data = state.emb_step_counts_data.sort_values(by=["timestamp_iso"], ascending=True)
             timestamps = state.emb_step_counts_data["timestamp_iso"].tolist()
+            timestamps = convert_to_local_timezone(timestamps, "Australia/Brisbane")
             steps = state.emb_step_counts_data["step_counts"].tolist()
             state.emb_step_counts_data_chart = {"Period": timestamps, "STEPS": steps}
             state.emb_step_counts_visible = True
@@ -283,6 +308,7 @@ def on_upload_embrace(state):
                 state.emb_temp_data = pd.concat([state.emb_temp_data, temp], axis=0)
             state.emb_temp_data = state.emb_temp_data.sort_values(by=["timestamp_iso"], ascending=True)
             timestamps = state.emb_temp_data["timestamp_iso"].tolist()
+            timestamps = convert_to_local_timezone(timestamps, "Australia/Brisbane")
             temperature = state.emb_temp_data["temperature_celsius"].tolist()
             state.emb_temp_hist_data_chart = state.emb_temp_data["temperature_celsius"].tolist()
             state.emb_temp_data_chart = {"Period": timestamps, "TEMP": temperature}
@@ -296,6 +322,7 @@ def on_upload_embrace(state):
                 state.emb_prv_data = pd.concat([state.emb_prv_data, temp], axis=0)
             state.emb_prv_data = state.emb_prv_data.sort_values(by=["timestamp_iso"], ascending=True)
             timestamps = state.emb_prv_data["timestamp_iso"].tolist()
+            timestamps = convert_to_local_timezone(timestamps, "Australia/Brisbane")
             prv = state.emb_prv_data["prv_rmssd_ms"].tolist()
             state.emb_prv_data_chart = {"Period": timestamps, "PRV": prv}
             state.emb_prv_visible = True
@@ -308,6 +335,7 @@ def on_upload_embrace(state):
                 state.emb_acc_data = pd.concat([state.emb_acc_data, temp], axis=0)
             state.emb_acc_data = state.emb_acc_data.sort_values(by=["timestamp_iso"], ascending=True)
             timestamps = state.emb_acc_data["timestamp_iso"].tolist()
+            timestamps = convert_to_local_timezone(timestamps, "Australia/Brisbane")
             magnitude = state.emb_acc_data["accelerometers_std_g"].tolist()
             state.emb_acc_data_chart = {"Period": timestamps, "Magnitude": magnitude}
             state.emb_acc_visible = True
@@ -320,6 +348,7 @@ def on_upload_embrace(state):
                 state.emb_activity_counts_data = pd.concat([state.emb_activity_counts_data, temp], axis=0)
             state.emb_activity_counts_data = state.emb_activity_counts_data.sort_values(by=["timestamp_iso"], ascending=True)
             timestamps = state.emb_activity_counts_data["timestamp_iso"].tolist()
+            timestamps = convert_to_local_timezone(timestamps, "Australia/Brisbane")
             activity_counts = state.emb_activity_counts_data["activity_counts"].tolist()
             state.emb_activity_counts_data_chart = {"Period": timestamps, "Activity Counts": activity_counts}
             state.emb_activity_counts_visible = True
@@ -332,6 +361,7 @@ def on_upload_embrace(state):
                 state.emb_pulse_rate_data = pd.concat([state.emb_pulse_rate_data, temp], axis=0)
             state.emb_pulse_rate_data = state.emb_pulse_rate_data.sort_values(by=["timestamp_iso"], ascending=True)
             timestamps = state.emb_pulse_rate_data["timestamp_iso"].tolist()
+            timestamps = convert_to_local_timezone(timestamps, "Australia/Brisbane")
             pulse_rate = state.emb_pulse_rate_data["pulse_rate_bpm"].tolist()
             state.emb_hr_hist_data_chart = state.emb_pulse_rate_data["pulse_rate_bpm"].tolist()
             state.emb_pulse_rate_data_chart = {"Period": timestamps, "Pulse Rate": pulse_rate}
@@ -345,6 +375,7 @@ def on_upload_embrace(state):
                 state.emb_eda_data = pd.concat([state.emb_eda_data, temp], axis=0)
             state.emb_eda_data = state.emb_eda_data.sort_values(by=["timestamp_iso"], ascending=True)
             timestamps = state.emb_eda_data["timestamp_iso"].tolist()
+            timestamps = convert_to_local_timezone(timestamps, "Australia/Brisbane")
             eda = state.emb_eda_data["eda_scl_usiemens"].tolist()
             state.emb_eda_hist_data_chart = state.emb_eda_data["eda_scl_usiemens"].tolist()
             state.emb_eda_data_chart = {"Period": timestamps, "EDA": eda}
@@ -663,11 +694,20 @@ with tgb.Page() as page_main:
                             tgb.chart("{emb_eda_hist_data_chart}", type="histogram", height="300px", rebuild=True, title="EDA", layout="{hist_chart_layout}")
                         with tgb.part(render="{emb_temp_visible}"):
                             tgb.chart("{emb_temp_hist_data_chart}", type="histogram", height="300px", rebuild=True, title="TEMP", layout="{hist_chart_layout}")                 
+                    with tgb.layout("1 1 1 1"):
+                        with tgb.part():
+                            pass
+                        with tgb.part(render="{emb_prv_visible}"):
+                            tgb.chart("{emb_prv_data_chart}", type="box", y="PRV", height="300px", rebuild=True, title="HR", layout="{box_chart_layout}")
+                        with tgb.part(render="{emb_eda_visible}"):
+                            tgb.chart("{emb_eda_data_chart}", type="box", y="EDA", height="300px", rebuild=True, title="EDA", layout="{box_chart_layout}")
+                        with tgb.part(render="{emb_temp_visible}"):
+                            tgb.chart("{emb_temp_data_chart}", type="box", y="TEMP", height="300px", rebuild=True, title="TEMP", layout="{box_chart_layout}")
+        
         with tgb.part(render="{emb_pred_visible}"):
             with tgb.expandable(title="Emotional State", expanded=False):
                 with tgb.part():
                     tgb.chart("{emb_pred_data_chart}", x="Period", y__1="Stress", y__2="Arousal", y__3="Valence", y__4="Attention", height="300px", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{pred_chart_properties}")
-               
         # empatica e4
         with tgb.part(render="{e4_hr_visible}"):
             with tgb.expandable(title="Heart Rate", expanded=True):
@@ -680,7 +720,7 @@ with tgb.Page() as page_main:
                 tgb.chart("{e4_bvp_data_chart}", height="300px", x="Period", y="BVP", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{chart_properties}")
         with tgb.part(render="{e4_temp_visible}"):
             with tgb.expandable(title="Temperature", expanded=True):
-                tgb.chart("{e4_temp_data_chart}", height="300px", x="Period", y="TEMP", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{chart_properties}")
+                tgb.chart("{e4_temp_data_chart}",height="300px", x="Period", y="TEMP", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{chart_properties}")
         with tgb.part(render="{e4_ibi_visible}"):
             with tgb.expandable(title="Interbeat Interval", expanded=True):
                 tgb.chart("{e4_ibi_data_chart}", height="300px", x="Period", y="IBI", rebuild=True, layout="{chart_layout}", plot_config="{chart_config}", properties="{chart_properties}")
@@ -699,6 +739,15 @@ with tgb.Page() as page_main:
                             tgb.chart("{e4_eda_hist_data_chart}", type="histogram", height="300px", rebuild=True, title="EDA", layout="{hist_chart_layout}")
                         with tgb.part(render="{e4_temp_visible}"):
                             tgb.chart("{e4_temp_hist_data_chart}", type="histogram", height="300px", rebuild=True, title="TEMP", layout="{hist_chart_layout}")
+                    with tgb.layout("1 1 1 1"):
+                        with tgb.part():
+                            pass
+                        with tgb.part(render="{e4_hr_visible}"):
+                            tgb.chart("{e4_hr_data_chart}", type="box", y="HR", height="300px", rebuild=True, title="HR", layout="{box_chart_layout}")
+                        with tgb.part(render="{e4_eda_visible}"):
+                            tgb.chart("{e4_eda_data_chart}", type="box", y="EDA", height="300px", rebuild=True, title="EDA", layout="{box_chart_layout}")
+                        with tgb.part(render="{e4_temp_visible}"):
+                            tgb.chart("{e4_temp_data_chart}", type="box", y="TEMP", height="300px", rebuild=True, title="TEMP", layout="{box_chart_layout}")
         with tgb.part(render="{e4_pred_visible}"):
             with tgb.expandable(title="Emotional State", expanded=False):
                 with tgb.part():
